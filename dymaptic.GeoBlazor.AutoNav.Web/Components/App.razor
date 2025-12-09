@@ -1,0 +1,24 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="icon" type="image/png" href="_content/dymaptic.GeoBlazor.AutoNav.Shared/favicon.ico" />
+    <link rel="stylesheet" href="@Assets["dymaptic.GeoBlazor.AutoNav.Web.styles.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/dymaptic.GeoBlazor.AutoNav.Shared/bootstrap/bootstrap.min.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/dymaptic.GeoBlazor.AutoNav.Shared/app.css"]" />
+    <link href="@Assets["_content/dymaptic.GeoBlazor.Core"]"/>
+    <ImportMap />
+    
+    <HeadOutlet @rendermode="InteractiveAuto" />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveAuto" />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="@Assets["_content/dymaptic.GeoBlazor.AutoNav.Shared/functions.js"]"></script>
+</body>
+
+</html>

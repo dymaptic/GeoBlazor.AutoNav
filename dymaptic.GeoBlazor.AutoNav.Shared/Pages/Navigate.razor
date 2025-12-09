@@ -1,0 +1,358 @@
+@page "/"
+
+@implements IDisposable
+
+<PageTitle>AutoNav</PageTitle>
+
+<div class="navigation-container">
+@if (_darkMode is not null)
+{
+    <MapView @ref="_mapView"
+             Theme="@(_darkMode.Value ? ArcGISTheme.Dark : ArcGISTheme.Light)"
+             Style="height:100vh; width:100%; position:fixed; top:0; left:0;"
+             OnViewRendered="OnMapRendered"
+             Zoom="16">
+        <Map>
+            <Basemap>
+                <BasemapStyle Name="@(_darkMode.Value ? BasemapStyleName.OsmNavigationDark : BasemapStyleName.ArcgisNavigation)" />
+            </Basemap>
+            <GraphicsLayer @ref="_userLocationLayer" />
+            <GraphicsLayer @ref="_routeLayer" />
+            <MapImageLayer @ref="_trafficLayer">
+                <PortalItem PortalItemId="ff11eb5b930b4fabba15c47feb130de4" />
+            </MapImageLayer>
+        </Map>
+        <SearchWidget @ref="_searchWidget"
+                      ContainerId="search-container"
+                      AllPlaceholder="Where to?"
+                      OnSelectResult="OnSelectResult" />
+        <TrackWidget @ref="_trackWidget"
+                     Position="OverlayPosition.TopLeft"
+                     OnTrack="OnTrack"
+                     RotationEnabled="true" />
+    </MapView>
+    
+}
+    <!-- Search Box -->
+    <div class="search-box">
+        @if (NavState.Mode == NavigationMode.Idle || NavState.Mode == NavigationMode.Searching)
+        {
+            <div class="search-inputs">
+                <div class="input-group">
+                    <input type="text"
+                           class="form-control origin-input"
+                           placeholder="Your location"
+                           value="@_originText"
+                           readonly />
+                </div>
+                <div class="input-group" id="search-container">
+                </div>
+            </div>
+        }
+        else if (NavState.Mode == NavigationMode.Navigating)
+        {
+            <div class="route-summary">
+                <div class="route-info">
+                    <strong>@FormatDistance(NavState.TotalDistance)</strong>
+                    <span> • @FormatTime(NavState.TotalTime)</span>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="ClearRoute">
+                    ✕
+                </button>
+            </div>
+        }
+    </div>
+
+    <!-- Location Button -->
+    <button class="location-button" @onclick="CenterOnUserLocation" title="Center on my location">
+        <span class="location-icon">📍</span>
+    </button>
+
+    <!-- Directions Panel -->
+    @if (NavState.Directions.Any())
+    {
+        <div class="directions-panel @(_directionsExpanded ? "expanded" : "collapsed")">
+            <div class="directions-header" @onclick="ToggleDirections">
+                <div class="directions-summary">
+                    <strong>@FormatDistance(NavState.TotalDistance)</strong>
+                    <span> • @FormatTime(NavState.TotalTime)</span>
+                </div>
+                <span class="expand-icon">@(_directionsExpanded ? "▼" : "▲")</span>
+            </div>
+
+            @if (_directionsExpanded)
+            {
+                <div class="directions-list">
+                    @foreach ((DirectionStep step, int index) in NavState.Directions.Select((s, i) => (s, i)))
+                    {
+                        <div class="direction-step @(index == NavState.CurrentStepIndex ? "current" : "")">
+                            <div class="step-icon">@GetManeuverIcon(step.ManeuverType)</div>
+                            <div class="step-content">
+                                <div class="step-text">@step.Text</div>
+                                <div class="step-distance">@FormatDistance(step.Distance)</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+
+    [Inject]
+    public required NavigationService NavService { get; set; }
+    [Inject]
+    public required NavigationState NavState { get; set; }
+    
+    [Inject]
+    public required IJSRuntime JsRuntime { get; set; }
+
+    [JSInvokable]
+    public async Task DarkModeToggled(bool darkMode)
+    {
+        _darkMode = darkMode;
+        if (_mapView is not null && _mapView.MapRendered)
+        {
+            await _mapView!.Refresh();
+        }
+        StateHasChanged();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JsRuntime.InvokeVoidAsync("registerThemeWatcher", DotNetObjectReference.Create(this));
+        }
+    }
+
+    private async Task OnMapRendered()
+    {
+        // Get initial location and center map
+        if (_firstRender)
+        {
+            _firstRender = false;
+            await _trackWidget!.Start();
+            while (NavState.UserLocation is null)
+            {
+                await Task.Delay(100);
+            }
+            await CenterOnUserLocation();
+        }
+    }
+
+    private void OnTrack(TrackEvent trackEvent)
+    {
+        Point location = new Point(trackEvent.Position.Coords.Longitude, trackEvent.Position.Coords.Latitude);
+        NavState.UserLocation = location;
+    }
+    
+    private async Task OnSelectResult(SearchSelectResultEvent resultEvent)
+    {
+        if (resultEvent.Result?.Feature is null)
+        {
+            return;
+        }
+        
+        NavState.Mode = NavigationMode.Routing;
+
+        try
+        {
+            Graphic searchResultFeature = resultEvent.Result.Feature;
+            Point? searchPoint = searchResultFeature.Geometry as Point ?? resultEvent.Result.Extent?.Center;
+            NavState.Destination = searchPoint;
+
+            if (searchPoint is null)
+            {
+                Console.WriteLine("Could not parse search result location");
+                NavState.Mode = NavigationMode.Idle;
+                return;
+            }
+
+            // Use current location as origin
+            if (NavState.UserLocation == null)
+            {
+                Console.WriteLine("Could not get current location");
+                NavState.Mode = NavigationMode.Idle;
+                return;
+            }
+
+            NavState.Origin = NavState.UserLocation;
+
+            // Calculate route
+            RouteSolveResult? routeResult = await NavService.CalculateRouteAsync(NavState.Origin, searchPoint);
+            if (routeResult == null)
+            {
+                Console.WriteLine("Could not calculate route");
+                NavState.Mode = NavigationMode.Idle;
+                return;
+            }
+
+            // Get directions
+            List<DirectionStep> directions = NavService.GetDirections(routeResult);
+            NavState.Directions = directions;
+            NavState.RouteGeometry = routeResult.RouteResults?.FirstOrDefault()?.Route?.Geometry as Polyline;
+
+            if (NavState.RouteGeometry is null)
+            {
+                return;
+            }
+
+            // Display route on map
+            await DisplayRoute(NavState.RouteGeometry!, NavState.Origin, searchPoint);
+
+            NavState.Mode = NavigationMode.Navigating;
+            _directionsExpanded = true;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error calculating route: {ex.Message}");
+            NavState.Mode = NavigationMode.Idle;
+        }
+    }
+
+    private async Task CenterOnUserLocation()
+    {
+        Point? location = NavState.UserLocation;
+        if (location is not null)
+        {
+            await CenterMapOnLocation(location.Latitude!.Value, location.Longitude!.Value);
+        }
+    }
+
+    private async Task CenterMapOnLocation(double lat, double lon, int zoom = 17)
+    {
+        if (_mapView == null) return;
+
+        try
+        {
+            Point point = new(lon, lat);
+            Graphic graphic = new(point);
+            await _mapView.SetZoom(zoom);
+            await _mapView.GoTo([graphic]);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error centering map: {ex.Message}");
+        }
+    }
+
+    private async Task DisplayRoute(Polyline? routeGeometry, Point origin, Point destination)
+    {
+        if (_routeLayer == null || _mapView == null) return;
+
+        try
+        {
+            // Clear previous route
+            await _routeLayer.RemoveAll();
+
+            if (routeGeometry != null)
+            {
+                // Route line
+                SimpleLineSymbol routeSymbol = new(new MapColor(0, 122, 255), 5, SimpleLineSymbolStyle.Solid);
+                Graphic routeGraphic = new Graphic(routeGeometry, routeSymbol);
+                await _routeLayer.Add(routeGraphic);
+
+                // Origin marker (green)
+                SimpleMarkerSymbol originSymbol = new(null, new MapColor(76, 175, 80), 14, SimpleMarkerSymbolStyle.Circle);
+                await _routeLayer.Add(new Graphic(origin, originSymbol));
+
+                // Destination marker (red)
+                SimpleMarkerSymbol destSymbol = new SimpleMarkerSymbol(null, new MapColor(244, 67, 54), 14, SimpleMarkerSymbolStyle.Circle);
+                await _routeLayer.Add(new Graphic(destination, destSymbol));
+
+                // Zoom to route extent
+                Extent? extent = routeGeometry.Extent;
+                if (extent is not null)
+                {
+                    await _mapView.GoTo(extent);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error displaying route: {ex.Message}");
+        }
+    }
+
+    private async Task ClearRoute()
+    {
+        NavState.ClearRoute();
+        _directionsExpanded = false;
+
+        if (_routeLayer != null)
+        {
+            await _routeLayer.RemoveAll();
+        }
+    }
+
+    private void ToggleDirections()
+    {
+        _directionsExpanded = !_directionsExpanded;
+    }
+
+    private string FormatDistance(double? meters)
+    {
+        if (!meters.HasValue) return "0 m";
+
+        if (meters.Value < 1000)
+        {
+            return $"{meters.Value:F0} m";
+        }
+        else
+        {
+            return $"{(meters.Value / 1000):F1} km";
+        }
+    }
+
+    private string FormatTime(double? seconds)
+    {
+        if (!seconds.HasValue) return "0 min";
+
+        int minutes = (int)(seconds.Value / 60);
+        if (minutes < 60)
+        {
+            return $"{minutes} min";
+        }
+        else
+        {
+            int hours = minutes / 60;
+            int remainingMinutes = minutes % 60;
+            return $"{hours} h {remainingMinutes} min";
+        }
+    }
+
+    private string GetManeuverIcon(string maneuverType)
+    {
+        return maneuverType.ToLower() switch
+        {
+            "straight" => "↑",
+            "left" => "←",
+            "right" => "→",
+            "sharp-left" => "↰",
+            "sharp-right" => "↱",
+            "u-turn" => "↶",
+            _ => "•"
+        };
+    }
+
+    public void Dispose()
+    {
+        NavState.OnStateChanged -= StateHasChanged;
+    }
+
+    private MapView? _mapView;
+    private GraphicsLayer? _userLocationLayer;
+    private GraphicsLayer? _routeLayer;
+    private MapImageLayer? _trafficLayer;
+    private TrackWidget? _trackWidget;
+    private SearchWidget? _searchWidget;
+
+    private readonly string _originText = "Your location";
+    private bool _directionsExpanded;
+    private Graphic? _userLocationGraphic;
+    private bool _firstRender = true;
+    private bool? _darkMode;
+}
