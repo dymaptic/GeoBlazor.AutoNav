@@ -1,10 +1,7 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using dymaptic.GeoBlazor.AutoNav.Shared.Services;
-using dymaptic.GeoBlazor.AutoNav.Services;
 using System.Reflection;
-using AutoNav.Services;
-using AutoNav.Shared.Services;
 using dymaptic.GeoBlazor.Pro;
 
 namespace dymaptic.GeoBlazor.AutoNav.Maui;
@@ -22,7 +19,6 @@ public static class MauiProgram
             });
 
         // Add device-specific services used by the dymaptic.GeoBlazor.AutoNav.Shared project
-        builder.Services.AddSingleton<IFormFactor, FormFactor>();
         builder.Services.AddSingleton<NavigationState>();
         builder.Services.AddSingleton<NavigationService>();
 

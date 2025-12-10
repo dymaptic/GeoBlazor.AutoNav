@@ -108,6 +108,8 @@
     
     [Inject]
     public required IJSRuntime JsRuntime { get; set; }
+    [Inject]
+    public required ProjectionEngine ProjectionEngine { get; set; }
 
     [JSInvokable]
     public async Task DarkModeToggled(bool darkMode)
@@ -134,6 +136,7 @@
         if (_firstRender)
         {
             _firstRender = false;
+            _spatialReference = await _mapView!.GetSpatialReference();
             await _trackWidget!.Start();
             while (NavState.UserLocation is null)
             {
@@ -145,7 +148,9 @@
 
     private void OnTrack(TrackEvent trackEvent)
     {
-        Point location = new Point(trackEvent.Position.Coords.Longitude, trackEvent.Position.Coords.Latitude);
+        Point location = new Point(trackEvent.Position.Coords.Longitude, trackEvent.Position.Coords.Latitude,
+            trackEvent.Position.Coords.Longitude, trackEvent.Position.Coords.Latitude,
+            spatialReference: SpatialReference.Wgs84);
         NavState.UserLocation = location;
     }
     
@@ -179,7 +184,8 @@
                 return;
             }
 
-            NavState.Origin = NavState.UserLocation;
+            NavState.Origin = (Point)(await ProjectionEngine.Project(NavState.UserLocation,
+                _spatialReference!))!;
 
             // Calculate route
             RouteSolveResult? routeResult = await NavService.CalculateRouteAsync(NavState.Origin, searchPoint);
@@ -355,4 +361,5 @@
     private Graphic? _userLocationGraphic;
     private bool _firstRender = true;
     private bool? _darkMode;
+    private SpatialReference? _spatialReference;
 }

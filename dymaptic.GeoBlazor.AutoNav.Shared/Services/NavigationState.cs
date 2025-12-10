@@ -1,6 +1,6 @@
 using dymaptic.GeoBlazor.Core.Components.Geometries;
 
-namespace AutoNav.Shared.Services;
+namespace dymaptic.GeoBlazor.AutoNav.Shared.Services;
 
 public class NavigationState
 {

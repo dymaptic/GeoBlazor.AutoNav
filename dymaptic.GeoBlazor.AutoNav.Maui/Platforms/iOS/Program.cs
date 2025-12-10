@@ -1,7 +1,7 @@
 ﻿using ObjCRuntime;
 using UIKit;
 
-namespace AutoNav.Maui;
+namespace dymaptic.GeoBlazor.AutoNav.Maui;
 
 public class Program
 {

@@ -1,6 +1,5 @@
 using dymaptic.GeoBlazor.AutoNav.Web.Components;
 using dymaptic.GeoBlazor.AutoNav.Shared.Services;
-using dymaptic.GeoBlazor.AutoNav.Web.Services;
 using dymaptic.GeoBlazor.Pro;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -11,7 +10,6 @@ builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents();
 
 // Add device-specific services used by the dymaptic.GeoBlazor.AutoNav.Shared project
-builder.Services.AddSingleton<IFormFactor, FormFactor>();
 builder.Services.AddSingleton<NavigationState>();
 builder.Services.AddScoped<NavigationService>();
 

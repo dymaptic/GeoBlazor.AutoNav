@@ -1,7 +1,7 @@
 ﻿using Android.App;
 using Android.Runtime;
 
-namespace AutoNav.Maui;
+namespace dymaptic.GeoBlazor.AutoNav.Maui;
 
 [Application]
 public class MainApplication : MauiApplication

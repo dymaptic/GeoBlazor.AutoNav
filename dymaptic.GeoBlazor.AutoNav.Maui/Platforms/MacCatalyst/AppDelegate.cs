@@ -1,6 +1,6 @@
 ﻿using Foundation;
 
-namespace AutoNav.Maui;
+namespace dymaptic.GeoBlazor.AutoNav.Maui;
 
 [Register("AppDelegate")]
 public class AppDelegate : MauiUIApplicationDelegate

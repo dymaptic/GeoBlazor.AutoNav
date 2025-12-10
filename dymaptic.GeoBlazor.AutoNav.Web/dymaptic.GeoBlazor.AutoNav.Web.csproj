@@ -9,5 +9,8 @@
     <ProjectReference Include="..\dymaptic.GeoBlazor.AutoNav.Web.Client\dymaptic.GeoBlazor.AutoNav.Web.Client.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
   </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Services\" />
+  </ItemGroup>
 
 </Project>

@@ -5,7 +5,7 @@ using dymaptic.GeoBlazor.Pro.Components;
 using dymaptic.GeoBlazor.Pro.Model;
 using dymaptic.GeoBlazor.Pro.Results;
 
-namespace AutoNav.Shared.Services;
+namespace dymaptic.GeoBlazor.AutoNav.Shared.Services;
 
 public class NavigationService(RouteService routeService, LocationService locationService)
 {
